@@ -13,7 +13,25 @@ MicroPython shutter tester for the Raspberry Pi Pico. It reads three light senso
 - Raspberry Pi Pico running MicroPython
 - `mpremote` installed on your computer
 - OLED display wired to I2C pins `GP16` / `GP17`
-- Three light sensors wired to `GP11`, `GP12`, and `GP13`
+- Three `SFH 309` phototransistors wired to `GP11`, `GP12`, and `GP13`
+
+## Wiring
+
+This build uses three `SFH 309` phototransistors. The Pico's internal pull-up resistors are used, so there are no external resistors in the sensor circuit.
+
+Wire each sensor like this:
+
+- `SFH 309` collector -> Pico input pin (`GP11`, `GP12`, or `GP13`)
+- `SFH 309` emitter -> Pico `GND`
+
+The firmware configures the sensor pins with internal pull-ups, so the input reads `HIGH` in the dark and goes `LOW` when light hits the sensor.
+
+OLED wiring:
+
+- `VCC` -> Pico `3V3`
+- `GND` -> Pico `GND`
+- `SDA` -> Pico `GP16`
+- `SCL` -> Pico `GP17`
 
 ## Deploy
 

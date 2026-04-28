@@ -53,11 +53,11 @@ def nearest_shutter_speed(seconds):
 
     if nearest >= 1:
         if nearest == int(nearest):
-            return f"{int(nearest)}s"
-        return f"{nearest:.1f}s"
+            return f"{int(nearest)}"
+        return f"{nearest:.1f}"
 
     denom = round(1 / nearest)
-    return f"1/{denom}s"
+    return f"1/{denom}"
 
 
 def actual_shutter_speed(seconds):
@@ -103,9 +103,9 @@ def draw_results_screen():
 
 def draw_diagnostic_screen():
     oled.fill(0)
-    oled.text("Focal Plane", 16, 0)
 
     if None in last_start_us or None in last_end_us:
+        oled.text("Spread: ---", 0, 0)
         oled.text("Need A B C data", 4, 22)
         oled.text("Fire shutter", 18, 38)
         oled.show()
@@ -119,6 +119,8 @@ def draw_diagnostic_screen():
     # Exposure consistency across sensors
     valid = [m for m in last_ms if m is not None]
     spread_ms = max(valid) - min(valid)
+    average_ms = sum(valid) / len(valid)
+    spread_pct = (spread_ms / average_ms * 100) if average_ms > 0 else 0
 
     if ac_ms > 0:
         direction = "A > C"
@@ -127,20 +129,20 @@ def draw_diagnostic_screen():
     else:
         direction = "---"
 
+    oled.text(f"Spread:{spread_pct:.1f}%", 0, 0)
+
+    if spread_pct < 5.0:
+        bal = "GOOD"
+    elif spread_pct > 20.0:
+        bal = "BAD"
+    else:
+        bal = "OK"
+
+    oled.text(bal, 96, 0)
     oled.text(f"Dir: {direction}", 0, 12)
     oled.text(f"A-B:{abs(ab_ms):.2f}ms", 0, 24)
     oled.text(f"B-C:{abs(bc_ms):.2f}ms", 0, 36)
     oled.text(f"Travel:{abs(ac_ms):.2f}ms", 0, 48)
-
-    # Small right-side balance indicator
-    if spread_ms < 0.5:
-        bal = "OK"
-    elif spread_ms < 2.0:
-        bal = "MID"
-    else:
-        bal = "BAD"
-
-    oled.text(bal, 104, 48)
 
     oled.show()
 
