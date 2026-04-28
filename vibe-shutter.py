@@ -30,8 +30,10 @@ last_start_us = [None, None, None]
 last_end_us = [None, None, None]
 
 screen_mode = 0
-last_toggle_ms = time.ticks_ms()
-TOGGLE_INTERVAL_MS = 3000
+button_was_pressed = False
+button_press_ms = 0
+button_long_press_handled = False
+LONG_PRESS_RESET_MS = 1000
 
 
 # --------------------
@@ -208,10 +210,25 @@ draw_screen()
 # --------------------
 while True:
     screen_changed = False
-    
-    if rp2.bootsel_button():
-        reset_readings()
-        time.sleep(0.4)   # debounce
+
+    button_pressed = rp2.bootsel_button()
+    now_ms = time.ticks_ms()
+
+    if button_pressed and not button_was_pressed:
+        button_press_ms = now_ms
+        button_long_press_handled = False
+
+    if button_pressed and not button_long_press_handled:
+        if time.ticks_diff(now_ms, button_press_ms) >= LONG_PRESS_RESET_MS:
+            reset_readings()
+            button_long_press_handled = True
+
+    if not button_pressed and button_was_pressed:
+        if not button_long_press_handled:
+            screen_mode = 1 - screen_mode
+            screen_changed = True
+
+    button_was_pressed = button_pressed
 
     for i in range(3):
         if done[i]:
@@ -233,13 +250,6 @@ while True:
 
             done[i] = False
             screen_changed = True
-
-    now_ms = time.ticks_ms()
-
-    if time.ticks_diff(now_ms, last_toggle_ms) >= TOGGLE_INTERVAL_MS:
-        screen_mode = 1 - screen_mode
-        last_toggle_ms = now_ms
-        screen_changed = True
 
     if screen_changed:
         draw_screen()
