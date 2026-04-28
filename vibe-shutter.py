@@ -32,8 +32,8 @@ last_end_us = [None, None, None]
 screen_mode = 0
 button_was_pressed = False
 button_press_ms = 0
-button_long_press_handled = False
-LONG_PRESS_RESET_MS = 1000
+BUTTON_RESET_MS = 1000
+BUTTON_LEAF_MS = 2000
 
 
 # --------------------
@@ -147,11 +147,32 @@ def draw_diagnostic_screen():
     oled.show()
 
 
+def draw_leaf_screen():
+    oled.fill(0)
+
+    oled.text("Leaf Shutter", 20, 0)
+    oled.text("Center / B", 28, 12)
+
+    if last_ms[1] is None:
+        oled.text("Fire shutter", 18, 30)
+        oled.text("Need B data", 24, 42)
+        oled.show()
+        return
+
+    oled.text(f"{last_ms[1]:.1f} ms", 18, 28)
+    oled.text(last_approx[1], 18, 40)
+    oled.text(last_actual[1], 70, 40)
+
+    oled.show()
+
+
 def draw_screen():
     if screen_mode == 0:
         draw_results_screen()
-    else:
+    elif screen_mode == 1:
         draw_diagnostic_screen()
+    else:
+        draw_leaf_screen()
 
 def reset_readings():
     global last_ms, last_approx, last_actual
@@ -218,17 +239,22 @@ while True:
 
     if button_pressed and not button_was_pressed:
         button_press_ms = now_ms
-        button_long_press_handled = False
-
-    if button_pressed and not button_long_press_handled:
-        if time.ticks_diff(now_ms, button_press_ms) >= LONG_PRESS_RESET_MS:
-            reset_readings()
-            button_long_press_handled = True
 
     if not button_pressed and button_was_pressed:
-        if not button_long_press_handled:
-            screen_mode = 1 - screen_mode
+        hold_ms = time.ticks_diff(now_ms, button_press_ms)
+
+        if hold_ms >= BUTTON_LEAF_MS:
+            if screen_mode == 2:
+                screen_mode = 0
+            else:
+                screen_mode = 2
             screen_changed = True
+        elif hold_ms >= BUTTON_RESET_MS:
+            reset_readings()
+        else:
+            if screen_mode != 2:
+                screen_mode = 1 - screen_mode
+                screen_changed = True
 
     button_was_pressed = button_pressed
 

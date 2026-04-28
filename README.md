@@ -52,3 +52,8 @@ After copying, it resets the board so the updated firmware starts immediately.
 
 - Short press BOOTSEL: toggle between the results screen and the diagnostic screen
 - Hold BOOTSEL for 1 second: reset the last readings
+- Hold BOOTSEL for 2 seconds: toggle leaf shutter mode on and off using only sensor `GP12`
+
+## Leaf Shutter Mode
+
+Leaf shutter mode focuses on the center sensor only. It shows the timing result from sensor `GP12` and ignores the outer sensors on the display. Hold BOOTSEL for 2 seconds again to leave leaf mode and return to the focal-plane screens.
