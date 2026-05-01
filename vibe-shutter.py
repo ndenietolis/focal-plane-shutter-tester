@@ -1,7 +1,6 @@
 from machine import Pin, I2C
 import time
 import ssd1306
-import rp2
 
 # --------------------
 # OLED setup
@@ -15,25 +14,84 @@ oled = ssd1306.SSD1306_I2C(128, 64, i2c)
 # dark  = HIGH
 # light = LOW
 # --------------------
-sensor_pins = [11, 12, 13]  # A, B, C
+SENSOR_SPECS = [
+    {"pin": 9, "label": "9"},
+    {"pin": 10, "label": "10"},
+    {"pin": 11, "label": "11"},
+    {"pin": 12, "label": "12"},
+    {"pin": 13, "label": "13"},
+]
+
+BUTTON_VIEW_PIN = 7
+BUTTON_MODE_PIN = 8
+LED_PIN = 6
+
+sensor_pins = [spec["pin"] for spec in SENSOR_SPECS]
 sensors = [Pin(p, Pin.IN, Pin.PULL_UP) for p in sensor_pins]
+pin_to_index = {spec["pin"]: i for i, spec in enumerate(SENSOR_SPECS)}
+LEAF_INDEX = pin_to_index[11]
+THIRTYFIVE_INDICES = [pin_to_index[12], pin_to_index[11], pin_to_index[10]]
+FOURFIVE_INDICES = [pin_to_index[13], pin_to_index[11], pin_to_index[9]]
 
-start_us = [0, 0, 0]
-end_us = [0, 0, 0]
-measuring = [False, False, False]
-done = [False, False, False]
+button_view = Pin(BUTTON_VIEW_PIN, Pin.IN, Pin.PULL_UP)
+button_mode = Pin(BUTTON_MODE_PIN, Pin.IN, Pin.PULL_UP)
+led = Pin(LED_PIN, Pin.OUT)
+led_on = False
+led.value(0)
+buttons = {
+    BUTTON_VIEW_PIN: button_view,
+    BUTTON_MODE_PIN: button_mode,
+}
+button_was_pressed = {
+    BUTTON_VIEW_PIN: False,
+    BUTTON_MODE_PIN: False,
+}
+button_press_ms = {
+    BUTTON_VIEW_PIN: 0,
+    BUTTON_MODE_PIN: 0,
+}
 
-last_ms = [None, None, None]
-last_approx = ["---", "---", "---"]
-last_actual = ["---", "---", "---"]
-last_start_us = [None, None, None]
-last_end_us = [None, None, None]
-
-screen_mode = 0
-button_was_pressed = False
-button_press_ms = 0
+MODE_LEAF = 0
+MODE_35MM = 1
+MODE_4X5 = 2
+VIEW_TIME = 0
+VIEW_TRAVEL = 1
 BUTTON_RESET_MS = 1000
-BUTTON_LEAF_MS = 2000
+
+MODE_SPECS = [
+    {
+        "name": "Leaf",
+        "title": "Leaf Shutter",
+        "indices": [LEAF_INDEX],
+        "travel": False,
+    },
+    {
+        "name": "35mm",
+        "title": "35mm Shutter",
+        "indices": THIRTYFIVE_INDICES,
+        "travel": True,
+    },
+    {
+        "name": "4x5",
+        "title": "4x5 Shutter",
+        "indices": FOURFIVE_INDICES,
+        "travel": True,
+    },
+]
+
+start_us = [0] * len(SENSOR_SPECS)
+end_us = [0] * len(SENSOR_SPECS)
+measuring = [False] * len(SENSOR_SPECS)
+done = [False] * len(SENSOR_SPECS)
+
+last_ms = [None] * len(SENSOR_SPECS)
+last_approx = ["---"] * len(SENSOR_SPECS)
+last_actual = ["---"] * len(SENSOR_SPECS)
+last_start_us = [None] * len(SENSOR_SPECS)
+last_end_us = [None] * len(SENSOR_SPECS)
+
+screen_mode = MODE_LEAF
+view_mode = VIEW_TIME
 
 
 # --------------------
@@ -70,66 +128,74 @@ def actual_shutter_speed(seconds):
     return f"1/{1 / seconds:.0f}"
 
 
+def format_ms_value(value):
+    if value is None:
+        return "---"
+    return f"{value:.1f}"
+
+
+def current_mode_spec():
+    return MODE_SPECS[screen_mode]
+
+
+def toggle_led():
+    global led_on
+    led_on = not led_on
+    led.value(1 if led_on else 0)
+
+
 # --------------------
 # Display screens
 # --------------------
-def draw_results_screen():
+def draw_time_screen():
+    spec = current_mode_spec()
+    indices = spec["indices"]
+
     oled.fill(0)
+    oled.text(spec["title"], 0, 0)
+    oled.text("Time", 100, 0)
 
-    oled.text("Shutter Tester", 8, 0)
-
-    oled.text("A", 14, 12)
-    oled.text("B", 56, 12)
-    oled.text("C", 98, 12)
-
-    for i in range(3):
-        x = i * 42
-
-        if last_ms[i] is None:
-            ms_text = "---"
-            approx_text = "---"
-            actual_text = "---"
-        else:
-            ms_text = f"{last_ms[i]:.1f}"
-            approx_text = last_approx[i]
-            actual_text = last_actual[i]
-
-        oled.text(ms_text, x, 26)
-        oled.text(approx_text, x, 38)
-        oled.text(actual_text, x, 50)
+    for row, index in enumerate(indices):
+        y = 14 + (row * 16)
+        oled.text(f"{SENSOR_SPECS[index]['label']}", 0, y)
+        oled.text(f"{format_ms_value(last_ms[index])} ms", 24, y)
+        oled.text(last_approx[index], 86, y)
 
     oled.show()
 
 
-def draw_diagnostic_screen():
-    oled.fill(0)
+def draw_travel_screen():
+    spec = current_mode_spec()
+    indices = spec["indices"]
 
-    if None in last_start_us or None in last_end_us:
-        oled.text("Spread: ---", 0, 0)
-        oled.text("Need A B C data", 4, 22)
-        oled.text("Fire shutter", 18, 38)
+    oled.fill(0)
+    oled.text(spec["title"], 0, 0)
+    oled.text("Travel", 92, 0)
+
+    if any(last_start_us[i] is None or last_end_us[i] is None for i in indices):
+        oled.text("Spread: ---", 0, 14)
+        oled.text("Need sensor data", 0, 32)
+        oled.text("Fire shutter", 18, 48)
         oled.show()
         return
 
-    # Start-time travel across sensors
-    ab_ms = time.ticks_diff(last_start_us[1], last_start_us[0]) / 1000
-    bc_ms = time.ticks_diff(last_start_us[2], last_start_us[1]) / 1000
-    ac_ms = time.ticks_diff(last_start_us[2], last_start_us[0]) / 1000
-
-    # Exposure consistency across sensors
-    valid = [m for m in last_ms if m is not None]
+    valid = [last_ms[i] for i in indices if last_ms[i] is not None]
     spread_ms = max(valid) - min(valid)
     average_ms = sum(valid) / len(valid)
     spread_pct = (spread_ms / average_ms * 100) if average_ms > 0 else 0
 
-    if ac_ms > 0:
-        direction = "A > C"
-    elif ac_ms < 0:
-        direction = "C > A"
+    first = indices[0]
+    last = indices[-1]
+    travel_ms = time.ticks_diff(last_start_us[last], last_start_us[first]) / 1000
+
+    if travel_ms > 0:
+        direction = f"{SENSOR_SPECS[first]['label']} > {SENSOR_SPECS[last]['label']}"
+    elif travel_ms < 0:
+        direction = f"{SENSOR_SPECS[last]['label']} > {SENSOR_SPECS[first]['label']}"
     else:
         direction = "---"
 
-    oled.text(f"Spread:{spread_pct:.1f}%", 0, 0)
+    oled.text(f"Spread:{spread_pct:.1f}%", 0, 14)
 
     if spread_pct < 5.0:
         bal = "GOOD"
@@ -138,11 +204,13 @@ def draw_diagnostic_screen():
     else:
         bal = "OK"
 
-    oled.text(bal, 96, 0)
-    oled.text(f"Dir: {direction}", 0, 12)
-    oled.text(f"A-B:{abs(ab_ms):.2f}ms", 0, 24)
-    oled.text(f"B-C:{abs(bc_ms):.2f}ms", 0, 36)
-    oled.text(f"Travel:{abs(ac_ms):.2f}ms", 0, 48)
+    oled.text(bal, 96, 14)
+    oled.text(f"Dir: {direction}", 0, 28)
+    oled.text(f"Travel:{abs(travel_ms):.2f}ms", 0, 40)
+
+    for row, index in enumerate(indices):
+        y = 52
+        oled.text(f"{SENSOR_SPECS[index]['label']} {format_ms_value(last_ms[index])}", row * 40, y)
 
     oled.show()
 
@@ -151,38 +219,38 @@ def draw_leaf_screen():
     oled.fill(0)
 
     oled.text("Leaf Shutter", 20, 0)
-    oled.text("Center / B", 28, 12)
+    oled.text("Sensor 11", 30, 12)
 
-    if last_ms[1] is None:
+    if last_ms[LEAF_INDEX] is None:
         oled.text("Fire shutter", 18, 30)
-        oled.text("Need B data", 24, 42)
+        oled.text("Need center data", 0, 42)
         oled.show()
         return
 
-    oled.text(f"{last_ms[1]:.1f} ms", 18, 28)
-    oled.text(last_approx[1], 18, 40)
-    oled.text(last_actual[1], 70, 40)
+    oled.text(f"{last_ms[LEAF_INDEX]:.1f} ms", 18, 28)
+    oled.text(last_approx[LEAF_INDEX], 18, 40)
+    oled.text(last_actual[LEAF_INDEX], 70, 40)
 
     oled.show()
 
 
 def draw_screen():
-    if screen_mode == 0:
-        draw_results_screen()
-    elif screen_mode == 1:
-        draw_diagnostic_screen()
-    else:
+    if screen_mode == MODE_LEAF:
         draw_leaf_screen()
+    elif view_mode == VIEW_TIME:
+        draw_time_screen()
+    else:
+        draw_travel_screen()
 
 def reset_readings():
     global last_ms, last_approx, last_actual
     global last_start_us, last_end_us
 
-    last_ms = [None, None, None]
-    last_approx = ["---", "---", "---"]
-    last_actual = ["---", "---", "---"]
-    last_start_us = [None, None, None]
-    last_end_us = [None, None, None]
+    last_ms = [None] * len(SENSOR_SPECS)
+    last_approx = ["---"] * len(SENSOR_SPECS)
+    last_actual = ["---"] * len(SENSOR_SPECS)
+    last_start_us = [None] * len(SENSOR_SPECS)
+    last_end_us = [None] * len(SENSOR_SPECS)
 
     draw_screen()
     
@@ -221,7 +289,7 @@ for i, sensor in enumerate(sensors):
 # --------------------
 oled.fill(0)
 oled.text("Shutter Tester", 8, 0)
-oled.text("A B C sensors", 12, 22)
+oled.text("5 sensors", 28, 22)
 oled.text("Ready", 44, 42)
 oled.show()
 time.sleep(1)
@@ -233,32 +301,35 @@ draw_screen()
 # --------------------
 while True:
     screen_changed = False
-
-    button_pressed = rp2.bootsel_button()
     now_ms = time.ticks_ms()
 
-    if button_pressed and not button_was_pressed:
-        button_press_ms = now_ms
+    for pin in (BUTTON_VIEW_PIN, BUTTON_MODE_PIN):
+        button_pressed = buttons[pin].value() == 0
 
-    if not button_pressed and button_was_pressed:
-        hold_ms = time.ticks_diff(now_ms, button_press_ms)
+        if button_pressed and not button_was_pressed[pin]:
+            button_press_ms[pin] = now_ms
 
-        if hold_ms >= BUTTON_LEAF_MS:
-            if screen_mode == 2:
-                screen_mode = 0
-            else:
-                screen_mode = 2
-            screen_changed = True
-        elif hold_ms >= BUTTON_RESET_MS:
-            reset_readings()
-        else:
-            if screen_mode != 2:
-                screen_mode = 1 - screen_mode
-                screen_changed = True
+        if not button_pressed and button_was_pressed[pin]:
+            hold_ms = time.ticks_diff(now_ms, button_press_ms[pin])
 
-    button_was_pressed = button_pressed
+            if pin == BUTTON_VIEW_PIN:
+                if hold_ms >= BUTTON_RESET_MS:
+                    reset_readings()
+                elif screen_mode != MODE_LEAF:
+                    view_mode = VIEW_TRAVEL if view_mode == VIEW_TIME else VIEW_TIME
+                    screen_changed = True
+            elif pin == BUTTON_MODE_PIN:
+                if hold_ms >= BUTTON_RESET_MS:
+                    screen_mode = (screen_mode + 1) % len(MODE_SPECS)
+                    if screen_mode == MODE_LEAF:
+                        view_mode = VIEW_TIME
+                    screen_changed = True
+                else:
+                    toggle_led()
 
-    for i in range(3):
+        button_was_pressed[pin] = button_pressed
+
+    for i in range(len(SENSOR_SPECS)):
         if done[i]:
             duration_us = time.ticks_diff(end_us[i], start_us[i])
             duration_s = duration_us / 1_000_000
@@ -270,7 +341,7 @@ while True:
             last_end_us[i] = end_us[i]
 
             print(
-                f"{chr(65+i)}: "
+                f"{SENSOR_SPECS[i]['label']}: "
                 f"{last_ms[i]:.3f} ms, "
                 f"approx {last_approx[i]}, "
                 f"actual {last_actual[i]}"

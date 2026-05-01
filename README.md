@@ -1,6 +1,6 @@
 # Shutter Tester
 
-MicroPython shutter tester for the Raspberry Pi Pico. It reads three light sensors, measures shutter timings, and shows the latest results on a small OLED display.
+MicroPython shutter tester for the Raspberry Pi Pico. It reads five light sensors arranged in a line, measures shutter timings, and shows the latest results on a small OLED display.
 
 ## Files
 
@@ -13,18 +13,40 @@ MicroPython shutter tester for the Raspberry Pi Pico. It reads three light senso
 - Raspberry Pi Pico running MicroPython
 - `mpremote` installed on your computer
 - OLED display wired to I2C pins `GP16` / `GP17`
-- Three `SFH 309` phototransistors wired to `GP11`, `GP12`, and `GP13`
+- Five `SFH 309` phototransistors wired in a straight line
+- Two buttons wired to `GP7` and `GP8`
+- One LED driver transistor wired to `GP6`
 
 ## Wiring
 
-This build uses three `SFH 309` phototransistors. The Pico's internal pull-up resistors are used, so there are no external resistors in the sensor circuit.
+This build uses five `SFH 309` phototransistors. The Pico's internal pull-up resistors are used, so there are no external resistors in the sensor circuit.
+
+The sensor line is wired like this:
+
+- `GP9`
+- `GP10`
+- `GP11`
+- `GP12`
+- `GP13`
 
 Wire each sensor like this:
 
-- `SFH 309` collector -> Pico input pin (`GP11`, `GP12`, or `GP13`)
+- `SFH 309` collector -> Pico input pin
 - `SFH 309` emitter -> Pico `GND`
 
 The firmware configures the sensor pins with internal pull-ups, so the input reads `HIGH` in the dark and goes `LOW` when light hits the sensor.
+
+Buttons:
+
+- `GP7` -> view button
+- `GP8` -> LED / format button
+
+LED driver:
+
+- `GP6` -> transistor base through `1k` to `4.7k`
+- transistor emitter -> `GND`
+- transistor collector -> LED cathode
+- `3V3` -> `220 ohm` -> LED anode
 
 OLED wiring:
 
@@ -50,10 +72,13 @@ After copying, it resets the board so the updated firmware starts immediately.
 
 ## Controls
 
-- Short press BOOTSEL: toggle between the results screen and the diagnostic screen
-- Hold BOOTSEL for 1 second: reset the last readings
-- Hold BOOTSEL for 2 seconds: toggle leaf shutter mode on and off using only sensor `GP12`
+- Short press `GP7`: switch between time and travel views
+- Hold `GP7` for 1 second: reset the last readings
+- Short press `GP8`: toggle the LED
+- Hold `GP8` for 1 second: switch between leaf shutter, 35mm, and 4x5 modes
 
-## Leaf Shutter Mode
+## Modes
 
-Leaf shutter mode focuses on the center sensor only. It shows the timing result from sensor `GP12` and ignores the outer sensors on the display. Hold BOOTSEL for 2 seconds again to leave leaf mode and return to the focal-plane screens.
+- Leaf shutter: uses sensor `GP11` and shows a single time view
+- 35mm: uses sensors `GP12`, `GP11`, and `GP10`, with time and travel views
+- 4x5: uses sensors `GP13`, `GP11`, and `GP9`, with time and travel views
