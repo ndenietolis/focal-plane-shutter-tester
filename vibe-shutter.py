@@ -23,8 +23,8 @@ SENSOR_SPECS = [
 ]
 
 BUTTON_VIEW_PIN = 7
-BUTTON_MODE_PIN = 8
-LED_PIN = 6
+BUTTON_MODE_PIN = 6
+LED_PIN = 8
 
 sensor_pins = [spec["pin"] for spec in SENSOR_SPECS]
 sensors = [Pin(p, Pin.IN, Pin.PULL_UP) for p in sensor_pins]
@@ -92,6 +92,8 @@ last_end_us = [None] * len(SENSOR_SPECS)
 
 screen_mode = MODE_LEAF
 view_mode = VIEW_TIME
+last_status_draw_ms = 0
+STATUS_DRAW_INTERVAL_MS = 1000
 
 
 # --------------------
@@ -142,6 +144,20 @@ def toggle_led():
     global led_on
     led_on = not led_on
     led.value(1 if led_on else 0)
+
+
+def log_boot():
+    print("boot: shutter tester")
+    print(f"pins: view={BUTTON_VIEW_PIN}, mode={BUTTON_MODE_PIN}, led={LED_PIN}")
+    print("sensors:", ", ".join(str(spec["pin"]) for spec in SENSOR_SPECS))
+
+
+def draw_status_line():
+    oled.fill(0)
+    oled.text("Boot OK", 0, 0)
+    oled.text(f"LED:{'ON' if led_on else 'OFF'}", 0, 16)
+    oled.text(f"M:{screen_mode} V:{view_mode}", 0, 32)
+    oled.show()
 
 
 # --------------------
@@ -287,12 +303,15 @@ for i, sensor in enumerate(sensors):
 # --------------------
 # Startup screen
 # --------------------
+log_boot()
 oled.fill(0)
 oled.text("Shutter Tester", 8, 0)
 oled.text("5 sensors", 28, 22)
 oled.text("Ready", 44, 42)
 oled.show()
 time.sleep(1)
+draw_status_line()
+time.sleep(0.5)
 draw_screen()
 
 
@@ -311,20 +330,25 @@ while True:
 
         if not button_pressed and button_was_pressed[pin]:
             hold_ms = time.ticks_diff(now_ms, button_press_ms[pin])
+            print(f"button {pin} release: {hold_ms}ms")
 
             if pin == BUTTON_VIEW_PIN:
                 if hold_ms >= BUTTON_RESET_MS:
+                    print("action: reset")
                     reset_readings()
                 elif screen_mode != MODE_LEAF:
+                    print("action: toggle view")
                     view_mode = VIEW_TRAVEL if view_mode == VIEW_TIME else VIEW_TIME
                     screen_changed = True
             elif pin == BUTTON_MODE_PIN:
                 if hold_ms >= BUTTON_RESET_MS:
+                    print("action: cycle mode")
                     screen_mode = (screen_mode + 1) % len(MODE_SPECS)
                     if screen_mode == MODE_LEAF:
                         view_mode = VIEW_TIME
                     screen_changed = True
                 else:
+                    print("action: toggle led")
                     toggle_led()
 
         button_was_pressed[pin] = button_pressed

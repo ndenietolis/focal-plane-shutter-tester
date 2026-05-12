@@ -14,8 +14,8 @@ MicroPython shutter tester for the Raspberry Pi Pico. It reads five light sensor
 - `mpremote` installed on your computer
 - OLED display wired to I2C pins `GP16` / `GP17`
 - Five `SFH 309` phototransistors wired in a straight line
-- Two buttons wired to `GP7` and `GP8`
-- One LED driver transistor wired to `GP6`
+- Two buttons wired to `GP6` and `GP7`
+- One LED driver transistor wired to `GP8`
 
 ## Wiring
 
@@ -39,11 +39,11 @@ The firmware configures the sensor pins with internal pull-ups, so the input rea
 Buttons:
 
 - `GP7` -> view button
-- `GP8` -> LED / format button
+- `GP6` -> LED / format button
 
 LED driver:
 
-- `GP6` -> transistor base through `1k` to `4.7k`
+- `GP8` -> transistor base through `1k` to `4.7k`
 - transistor emitter -> `GND`
 - transistor collector -> LED cathode
 - `3V3` -> `220 ohm` -> LED anode
@@ -74,8 +74,8 @@ After copying, it resets the board so the updated firmware starts immediately.
 
 - Short press `GP7`: switch between time and travel views
 - Hold `GP7` for 1 second: reset the last readings
-- Short press `GP8`: toggle the LED
-- Hold `GP8` for 1 second: switch between leaf shutter, 35mm, and 4x5 modes
+- Short press `GP6`: toggle the LED
+- Hold `GP6` for 1 second: switch between leaf shutter, 35mm, and 4x5 modes
 
 ## Modes
 
